@@ -214,9 +214,13 @@ class GitSyncApp(QWidget):
 
     def push_repo(self):
         folder = self.folder_input.text().strip()
-
         if not folder:
             self.log("Error: Select folder.")
+            return
+
+        # પહેલા git repository છે કે નહીં તેની ખાતરી કરો
+        if not os.path.isdir(os.path.join(folder, ".git")):
+            self.log("Error: Not a git repository. Connect/Clone first.")
             return
 
         self.log("Adding files...")
@@ -232,15 +236,25 @@ class GitSyncApp(QWidget):
         )
 
         if not success:
-            # If nothing to commit, just inform and skip push
-            if "nothing to commit" in output:
+            # stderr અને stdout બંને ભેગા કરીને તપાસો
+            combined = (output + " " + self.run_git_command(["git", "commit", "-m", "test"], cwd=folder)[1]).lower()
+            if "nothing to commit" in combined or "nothing added to commit" in combined:
                 self.log("Nothing to commit. Push skipped.")
+                return
+            elif "please tell me who you are" in combined or "identity" in combined:
+                self.log("Git user.name/user.email not set. Run:\n"
+                        "  git config --global user.name 'Your Name'\n"
+                        "  git config --global user.email 'your@email.com'")
                 return
             else:
                 self.log(f"Commit error:\n{output}")
+                # સંપૂર્ણ ડિબગ માટે stdout પણ બતાવો
+                success2, out2 = self.run_git_command(["git", "commit", "-m", "Auto commit"], cwd=folder)
+                if out2:
+                    self.log(f"Additional info:\n{out2}")
                 return
 
-        # If commit succeeded, push
+        # Commit સફળ થયો હોય તો જ push કરો
         self.log("Pushing...")
         success, output = self.run_git_command(["git", "push"], cwd=folder)
 
